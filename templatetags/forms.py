@@ -506,8 +506,8 @@ class FieldChoicesNode(template.Node):
         return u''.join(out)
 
     def __repr__(self):
-        return '<FieldChoicesNode node: {}>'.format(self.val_var)
-            
+        return '<FieldChoicesNode node: {}>'.format(self.choice_var)
+
 class HiddenFieldsNode(template.Node):
     """
     A convenience tag that renders all the hidden form fields.
