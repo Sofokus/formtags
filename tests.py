@@ -260,6 +260,39 @@ class FormtagTests(unittest.TestCase):
             4.'4'='C4'
             """)
 
+    def test_optgroups(self):
+        """
+        A choice field with option groups
+        """
+        self.__test(
+            GroupedChoiceForm(),
+            # Template:
+            """
+            {% field "choicefield" %}
+            {% field_choice_groups %}
+            G{{ optgroup.index }}:{{ optgroup.label }};
+            {% field_choices %}
+            {{ choice.index }}.'{{ choice.value }}'='{{ choice.label }}'
+            {% endfield_choices %}
+            endG.
+            {% endfield_choice_groups %}
+            {% endfield %}
+            """,
+            # Expected:
+            """
+            G0:;
+            0.'0'='C0'
+            endG.
+            G1:GA;
+            1.'1'='C1'
+            2.'2'='C2'
+            endG.
+            G2:GB;
+            3.'3'='C3'
+            4.'4'='C4'
+            endG.
+            """)
+
     def test_nested_field(self):
         """
         Test the nesting of two form fields.

@@ -4,11 +4,12 @@ Version 1.0
 Copyright 2013 Sofokus Oy. Licensed under the MIT license.
 ---
 
-This library introduces four new tags and one filter:
+This library introduces five new tags and one filter:
 
     {% form name %} ... {% endform %}
     {% field ["matcher"...] [as field] %} ... {% endfield %}
     {% field_choices [as choice] %}...{% empty %}...{% endfield_choices %}
+    {% field_choice_groups [as optgroup] %}...{% endfield_choice_groups %}
     {% hidden_fields %}
     {{ field|widget_name }}
 
@@ -50,6 +51,19 @@ To render custom choice fields, the field_choices tag can be used:
     {% empty %}
     no choices!
     {% endfield_choices %}
+    {% endfield %}
+
+The field_choice_groups can be used together with field_choices to
+render grouped choice fields:
+    {% field "mychoicefield "%}
+    {% field_choice_groups %}
+    <div>
+    <h1>{{ optgroup.label }}</h1>
+    {% field_choices %}
+    ...
+    {% endfield_choices %}
+    </div>
+    {% endfield_choice_groups %}
     {% endfield %}
     
 Of course, the real power of this tag library is in the field matchers.
@@ -130,6 +144,9 @@ FORMVAR = "__FORMS_FORM"
 # The current form field will be available here, in
 # addition to the normal public variable (typically "field")
 CURFIELDVAR = "__FORMS_FIELD"
+
+# The current option group. Used by field_choices and field_choice_groups tags.
+OPTGROUPVAR = "__FORMS_OPTGROUP"
 
 # The actual form fields will be made available here.
 # They are packed into tuples, one for each tag.
@@ -452,7 +469,8 @@ class FieldChoicesNode(template.Node):
     index    -- The index number of the option (0-based)
     id       -- ID for the choice item
 
-    Note. Option groups will be flattened.
+    Note. Option groups will be flattened. Use the {% field_choice_groups %}
+    tag together with this one to render structured choices.
 
     If there are no choices, the {% empty %} block (if present) will be
     rendered.
@@ -486,9 +504,17 @@ class FieldChoicesNode(template.Node):
             }
             out.append(self.nodelists[0].render(context))
 
-        choice_index = 0
-        if field.field.choices:
-            for cval, clbl in field.field.choices:
+        if OPTGROUPVAR in context:
+            g = context[OPTGROUPVAR]
+            choices = g['choices']
+            choice_index = g['_next_idx']
+
+        else:
+            choices = field.field.choices
+            choice_index = 0
+
+        if choices:
+            for cval, clbl in choices:
                 if isinstance(clbl, (tuple, list)):
                     for val, lbl in clbl:
                         _render_choice(val, lbl, choice_index)
@@ -507,6 +533,80 @@ class FieldChoicesNode(template.Node):
 
     def __repr__(self):
         return '<FieldChoicesNode node: {}>'.format(self.choice_var)
+
+class FieldChoiceGroupsNode(template.Node):
+    """
+    A tag for rendering choice groups.
+    A {% field_choices %} tag is typically nested inside
+    to render the actual choices, but they can also be rendered
+    manually using the "choices" item of the group dictionary.
+
+    If the field has no choices, an empty unnamed group will
+    be rendered.
+
+    Choices not in any group will be rendered in unnamed group(s).
+
+    A dictionary "optgroup" is added to the context, which contains
+    the following items:
+
+    label   -- the group label
+    index   -- the index of the group (0 based)
+    choices -- the choice list
+    """
+
+    def __init__(self, nodelist, group_var):
+        self.nodelist = nodelist
+        self.group_var = group_var
+
+    def render(self, context):
+        if context[STATEVAR] == 0:
+            return u''
+
+        field = context[CURFIELDVAR]
+
+        groups = []
+        next_idx = 0
+        for option in field.field.choices:
+            if isinstance(option[1], (tuple, list)):
+                groups.append({
+                    'label': option[0],
+                    'index': len(groups),
+                    'choices': option[1],
+                    '_next_idx': next_idx,
+                    })
+                next_idx += len(option[1])
+
+            else:
+                if not groups or groups[-1].label is not None:
+                    groups.append({
+                        'label': '',
+                        'index': len(groups),
+                        'choices': [],
+                        '_next_idx': next_idx,
+                        })
+                groups[-1]['choices'].append(option)
+                next_idx += 1
+
+        if not groups:
+            groups.append({
+                'label': '',
+                'index': 0,
+                'choices': [],
+                '_next_idx': 0,
+                })
+
+        out = []
+        context.push()
+        for group in groups:
+            context[self.group_var] = group
+            context[OPTGROUPVAR] = group
+            out.append(self.nodelist.render(context))
+        context.pop()
+
+        return u'\n'.join(out)
+
+    def __repr__(self):
+        return '<FieldChoiceGroupsNode node: {}>'.format(self.group_var)
 
 class HiddenFieldsNode(template.Node):
     """
@@ -577,7 +677,24 @@ def field_choices(parser, token):
         parser.next_token()
 
     return FieldChoicesNode(nodelists, choice_var)
-    
+
+@register.tag
+def field_choice_groups(parser, token):
+    tokens = token.split_contents()[1:]
+
+    group_var = 'optgroup'
+
+    if len(tokens) == 2 and tokens[0] == 'as':
+        group_var = tokens[1]
+
+    elif len(tokens) != 0:
+        raise FormTagError("field_choice_group takes 0 or 2 arguments: [as <group var>]")
+
+    nodelist = parser.parse(('endfield_choice_groups',))
+    parser.delete_first_token()
+
+    return FieldChoiceGroupsNode(nodelist, group_var)
+
 @register.tag
 def hidden_fields(parser, token):
     return HiddenFieldsNode()
