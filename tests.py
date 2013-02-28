@@ -237,6 +237,29 @@ class FormtagTests(unittest.TestCase):
             'C'='Choice 3'(False),
             """)
 
+    def test_optgroups_flat(self):
+        """
+        A choice_field will flatten option groups.
+        """
+        self.__test(
+            GroupedChoiceForm(),
+            # Template:
+            """
+            {% field "choicefield" %}
+            {% field_choices %}
+            {{ choice.index }}.'{{ choice.value }}'='{{ choice.label }}'
+            {% endfield_choices %}
+            {% endfield %}
+            """,
+            # Expected:
+            """
+            0.'0'='C0'
+            1.'1'='C1'
+            2.'2'='C2'
+            3.'3'='C3'
+            4.'4'='C4'
+            """)
+
     def test_nested_field(self):
         """
         Test the nesting of two form fields.
@@ -290,6 +313,19 @@ class ChoiceForm2(forms.Form):
     choicefield = forms.ChoiceField(choices=(
         ('A', 'Choice 1'),
         ('B', 'Choice 2'),
+        ))
+
+class GroupedChoiceForm(forms.Form):
+    choicefield = forms.ChoiceField(choices=(
+        ('0', 'C0'),
+        ('GA', (
+            ('1', 'C1'),
+            ('2', 'C2'),
+        )),
+        ('GB', (
+            ('3', 'C3'),
+            ('4', 'C4'),
+        )),
         ))
 
 def _strip(text):

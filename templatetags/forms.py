@@ -452,7 +452,7 @@ class FieldChoicesNode(template.Node):
     index    -- The index number of the option (0-based)
     id       -- ID for the choice item
 
-    Note. Option groups are not currently supported.
+    Note. Option groups will be flattened.
 
     If there are no choices, the {% empty %} block (if present) will be
     rendered.
@@ -474,18 +474,29 @@ class FieldChoicesNode(template.Node):
 
         d = getattr(field.field, 'data', form.initial.get(field.name, None))
 
+        def _render_choice(value, label, idx):
+            selected = d and value in d
+            context[self.choice_var] = {
+                'value': value,
+                'label': label,
+                'selected': selected,
+                'checked': 'checked=checked' if selected else '',
+                'index': idx,
+                'id': '{}_{}'.format(field.auto_id, idx),
+            }
+            out.append(self.nodelists[0].render(context))
+
+        choice_index = 0
         if field.field.choices:
-            for idx, (cval, clbl) in enumerate(field.field.choices):
-                selected = d and cval in d
-                context[self.choice_var] = {
-                    'value': cval,
-                    'label': clbl,
-                    'selected': selected,
-                    'checked': 'checked=checked' if selected else '',
-                    'index': idx,
-                    'id': '{}_{}'.format(field.auto_id, idx),
-                }
-                out.append(self.nodelists[0].render(context))
+            for cval, clbl in field.field.choices:
+                if isinstance(clbl, (tuple, list)):
+                    for val, lbl in clbl:
+                        _render_choice(val, lbl, choice_index)
+                        choice_index += 1
+
+                else:
+                    _render_choice(cval, clbl, choice_index)
+                    choice_index += 1
 
         elif len(self.nodelists) > 1:
             out.append(self.nodelists[1].render(context))
