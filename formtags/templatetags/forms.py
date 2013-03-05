@@ -1,6 +1,6 @@
 """
 Tag library for simplifying custom form rendering in Django templates.
-Version 1.0
+Version 1.1
 Copyright 2013 Sofokus Oy. Licensed under the MIT license.
 ---
 
