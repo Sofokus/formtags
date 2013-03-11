@@ -321,7 +321,7 @@ def _assign_fields(form, fieldlist):
     # Let the sorted matchers greedily grab all the fields they can.
     # The results are stored in the original order.
     fields = form.visible_fields()
-    field_order = dict(f.name,idx for (idx, f) in enumerate(fields))
+    field_order = dict((f.name, idx) for (idx, f) in enumerate(fields))
 
     assigned = deque([[] for x in range(len(fieldlist))])
     for m in matcher_list:
