@@ -200,7 +200,7 @@ class FieldMatcher(object):
         raise NotImplementedError("No precedence given for field!")
 
     def __repr__(self):
-        return '{}({})'.format(type(self).__name__, self.definition_string)
+        return '{0}({1})'.format(type(self).__name__, self.definition_string)
 
 class AnyMatcher(FieldMatcher):
     """
@@ -282,13 +282,13 @@ class RelativeMatcher(FieldMatcher):
         elif operator == '>=':
             self.operator = lambda x, y: x >= y
         else:
-            raise FormTagError("Unknown operator: {}".format(operator))
+            raise FormTagError("Unknown operator: {0}".format(operator))
 
     def match(self, field, field_order):
         try:
             return self.operator(field_order[field.name], field_order[self.operand])
         except KeyError:
-            raise FormTagError("No such field: {}".format(self.operand))
+            raise FormTagError("No such field: {0}".format(self.operand))
 
     def is_required(self):
         return False
@@ -329,7 +329,7 @@ def _assign_fields(form, fieldlist):
 
     # Done. Left over fields indicate a bug in the template.
     if len(fields) > 0:
-        raise FormTagError("{} form field(s) left over!".format(len(fields)))
+        raise FormTagError("{0} form field(s) left over!".format(len(fields)))
 
     return assigned
 
@@ -355,7 +355,7 @@ def _take(fields, field_order, matcher):
         fields[:] = filter(lambda f: f not in matched, fields)
 
     elif matcher.is_required():
-        raise FormTagError("Matcher {!r} did not match any field!".format(matcher))
+        raise FormTagError("Matcher {0!r} did not match any field!".format(matcher))
 
     return matched
 
@@ -391,7 +391,7 @@ class FormNode(template.Node):
         return out
 
     def __repr__(self):
-        return '<Form node: {}>'.format(self.form)
+        return '<Form node: {0}>'.format(self.form)
 
 class FieldNode(template.Node):
     """
@@ -454,7 +454,7 @@ class FieldNode(template.Node):
             return u'\n'.join(out)
 
     def __repr__(self):
-        return '<Field node: {}>'.format(', '.join(repr(m) for m in self.__matchers))
+        return '<Field node: {0}>'.format(', '.join(repr(m) for m in self.__matchers))
 
 class FieldChoicesNode(template.Node):
     """
@@ -500,7 +500,7 @@ class FieldChoicesNode(template.Node):
                 'selected': selected,
                 'checked': 'checked=checked' if selected else '',
                 'index': idx,
-                'id': '{}_{}'.format(field.auto_id, idx),
+                'id': '{0}_{1}'.format(field.auto_id, idx),
             }
             out.append(self.nodelists[0].render(context))
 
@@ -532,7 +532,7 @@ class FieldChoicesNode(template.Node):
         return u''.join(out)
 
     def __repr__(self):
-        return '<FieldChoicesNode node: {}>'.format(self.choice_var)
+        return '<FieldChoicesNode node: {0}>'.format(self.choice_var)
 
 class FieldChoiceGroupsNode(template.Node):
     """
@@ -606,7 +606,7 @@ class FieldChoiceGroupsNode(template.Node):
         return u'\n'.join(out)
 
     def __repr__(self):
-        return '<FieldChoiceGroupsNode node: {}>'.format(self.group_var)
+        return '<FieldChoiceGroupsNode node: {0}>'.format(self.group_var)
 
 class HiddenFieldsNode(template.Node):
     """
@@ -640,7 +640,7 @@ def form(parser, token):
         nodelist = parser.parse(('endform',))
         parser.delete_first_token()
     except ValueError:
-        raise FormTagError("{} tag requires a single argument".format(token.contents.split()[0]))
+        raise FormTagError("{0} tag requires a single argument".format(token.contents.split()[0]))
 
     return FormNode(nodelist, form_var)
 

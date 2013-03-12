@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='formtags',
-    version='1.1',
+    version='1.2',
 
     packages=find_packages(),
 
