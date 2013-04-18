@@ -1,6 +1,6 @@
 """
 Tag library for simplifying custom form rendering in Django templates.
-Version 1.1
+Version 1.2
 Copyright 2013 Sofokus Oy. Licensed under the MIT license.
 ---
 
@@ -101,6 +101,10 @@ to low):
     "name"      --  Match the field with the given name. If the field does not
                     exist, an error is generated.
     "name?"     --  Like above, but missing fields are silently ignored.
+    "*name"     --  Match all fields ending with the given substring. If no
+                    fields are matched, an error is generated.
+    "*name?"    --  Like above, but no error is generated even if no field
+                    matches.
     "name*"     --  Match all fields starting with the given substring. If no
                     fields are matched, an error is generated.
     "name*?"    --  Like above, but no error is generated even if no field
@@ -225,27 +229,38 @@ class NameMatcher(FieldMatcher):
 
     Currently, we support simple wildcard matching.
     If the matcher ends with *, the name matches the prefix
-    of the form field. A wildcard matcher has lower precedence
-    than a non-wildcard name matcher.
+    of the form field. Or, if the matcher starts with a *, the
+    name matches the end of the field name.
+    A wildcard matcher has lower precedence than a non-wildcard name matcher.
     """
     def __init__(self, name):
         super(NameMatcher, self).__init__(name)
 
         if name[-1] == '*':
             self.wildcard = True
+            self.endswith = False
             self.name = name[:-1]
+        elif name[0] == '*':
+            self.wildcard = True
+            self.endswith = True
+            self.name = name[1:]
         else:
             self.wildcard = False
             self.name = name
 
     def match(self, field, field_order):
         if self.wildcard:
-            return field.name.startswith(self.name)
+            if self.endswith:
+                return field.name.endswith(self.name)
+            else:
+                return field.name.startswith(self.name)
         else:
             return field.name == self.name
 
     def precedence(self):
-        return 0 if not self.wildcard else 10
+        if self.wildcard:
+            return 10 if self.endswith else 11
+        return 0
 
 class OptionalNameMatcher(NameMatcher):
     """
@@ -258,7 +273,7 @@ class OptionalNameMatcher(NameMatcher):
         return False
 
     def precedence(self):
-        return super(OptionalNameMatcher, self).precedence() + 1
+        return super(OptionalNameMatcher, self).precedence() + 2
 
 class RelativeMatcher(FieldMatcher):
     """

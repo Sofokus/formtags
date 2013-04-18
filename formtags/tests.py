@@ -104,12 +104,31 @@ class FormtagTests(unittest.TestCase):
             "textfield,textfield2,"
             )
 
+        self.__test(
+            SimpleForm(),
+            # Template:
+            """{% field "*field2" %}{{ field.name }},{% endfield %}
+            {% field %}{% endfield %}""",
+            # Expected
+            "textfield2,numberfield2,"
+            )
+
         # Missing field test
         with self.assertRaises(FormTagError):
             self.__test(
                 SimpleForm(),
                 # Template:
                 """{% field "nonexistent*" %}{{ field.name }},{% endfield %}
+                {% field %}{% endfield %}""",
+                # Expected
+                "(exception expected)"
+                )
+
+        with self.assertRaises(FormTagError):
+            self.__test(
+                SimpleForm(),
+                # Template:
+                """{% field "*nonexistent" %}{{ field.name }},{% endfield %}
                 {% field %}{% endfield %}""",
                 # Expected
                 "(exception expected)"
