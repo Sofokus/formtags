@@ -348,6 +348,7 @@ class FormtagTests(unittest.TestCase):
             {% if_field "textfield2" %}F2{% endif_field %}
             {% if_field "nosuchfield" %}F3{% endif_field %}
             {% if_field "didnteventry" %}ERR{%else%}OK{% endif_field %}
+            {% if_field %}catchall{% endif_field %}
             {% field "textfield" %}{% endfield %}
             {% field "textfield2?" %}{% endfield %}
             {% field "nosuchfield?" %}{% endfield %}
@@ -358,6 +359,7 @@ class FormtagTests(unittest.TestCase):
             F1
             F2
             OK
+            catchall
             """)
 
     def __test(self, form, template, expected):

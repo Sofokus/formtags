@@ -728,6 +728,10 @@ def if_field(parser, token):
         nodelists.append(parser.parse(('endif_field',)))
         parser.next_token()
 
+    # No parameters: use catchall for consistency with {% field %}
+    if not tokens:
+        tokens = ['""']
+
     return IfFieldNode(nodelists, [parser.compile_filter(t) for t in tokens])
 
 @register.tag
