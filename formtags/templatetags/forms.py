@@ -8,6 +8,7 @@ This library introduces five new tags and one filter:
 
     {% form name %} ... {% endform %}
     {% field ["matcher"...] [as field] %} ... {% endfield %}
+    {% if_field ["matcher"] %}...{% else %}...{% endfield %}
     {% field_choices [as choice] %}...{% empty %}...{% endfield_choices %}
     {% field_choice_groups [as optgroup] %}...{% endfield_choice_groups %}
     {% hidden_fields %}
@@ -117,6 +118,15 @@ to low):
                 --  If no matcher is explicitly given, all remaining fields (if
                     any) will be matched.
 
+To check if a matcher matches anything, the if_field tag can be used. E.g.:
+
+    {% if_field "password" %}
+    <h2>Password:</h2>
+    {% endif_field %}
+    {% field "password" %}
+    ...
+    {% endfield %}
+
 In addition to the tags, the following filters are provided:
 
     {{ field|widget_name[:"name1 name2 ..."] }}
@@ -152,15 +162,7 @@ CURFIELDVAR = "__FORMS_FIELD"
 # The current option group. Used by field_choices and field_choice_groups tags.
 OPTGROUPVAR = "__FORMS_OPTGROUP"
 
-# The actual form fields will be made available here.
-# They are packed into tuples, one for each tag.
-FIELDSVAR = "__FORMS_FIELDS"
-
-# Field tags register their matchers here for sorting.
-FTAGSVAR = "__FORMS_FIELDTAGS"
-
 # Form rendering state.
-# This is either 0 for field gathering or 1 for final rendering.
 STATEVAR = "__FORMS_STATE"
 
 class FormTagError(template.TemplateSyntaxError):
@@ -311,23 +313,27 @@ class RelativeMatcher(FieldMatcher):
     def precedence(self):
         return 50 if self.op[0] == '<' else 60
 
-def _assign_fields(form, fieldlist):
+def _assign_fields(form, state):
     """
-    Return a list of fields from the given form matched by the matchers.
-    The returned value will be a list of tuples corresponding to the list
+    Order the matched form fields in the true order of the field tags.
+    The ordered field list will be set to state['fields'].
+    The output is a a list of tuples corresponding to the list
     of matchers. The matchers will be applied in order of their precedence.
     For optional matchers, the corresponding tuples may be empty.
 
+    The set "matches" will also be populated with the names of all matchers
+    which matched one or more field.
+
     Arguments:
-    form      -- the form whose fields to match
-    fieldlist -- list of field matchers
+    form  -- the form whose fields to match
+    state -- form rendering state
 
     """
 
     # Sort matcher list in order of precedence, but remember
     # the original order too
     matcher_list = []
-    for i, matchers in enumerate(fieldlist):
+    for i, matchers in enumerate(state['tags']):
         for m in matchers:
             matcher_list.append((i, m.precedence(), m))
 
@@ -338,15 +344,18 @@ def _assign_fields(form, fieldlist):
     fields = form.visible_fields()
     field_order = dict((f.name, idx) for (idx, f) in enumerate(fields))
 
-    assigned = deque([[] for x in range(len(fieldlist))])
+    assigned = deque([[] for x in range(len(state['tags']))])
     for m in matcher_list:
-        assigned[m[0]].extend(_take(fields, field_order, m[2]))
+        taken = _take(fields, field_order, m[2])
+        if taken:
+            state['matches'].add(m[2].definition_string)
+            assigned[m[0]].extend(taken)
 
     # Done. Left over fields indicate a bug in the template.
     if len(fields) > 0:
         raise FormTagError("{0} form field(s) left over!".format(len(fields)))
 
-    return assigned
+    state['fields'] = assigned
 
 def _take(fields, field_order, matcher):
     """
@@ -389,16 +398,21 @@ class FormNode(template.Node):
 
         # Gather fields
         context[FORMVAR] = context[self.form]
-        context[STATEVAR] = 0
-        context[FTAGSVAR] = []
+        context[STATEVAR] = {
+            'render': False,  # are we in render phase yet?
+            'tags': [],       # form field matcher tags
+            'fields': [],     # matched fields are collected here
+            'matches': set(), # set of matcher names that matched fields
+        }
+
         self.nodelist.render(context)
 
         # Assign fields to tags, taking matcher precedence in account
-        assigned = _assign_fields(context[self.form], context[FTAGSVAR])
-        context[FIELDSVAR] = assigned
+        # This populates 'fields' and 'matches'.
+        _assign_fields(context[self.form], context[STATEVAR])
 
         # Render
-        context[STATEVAR] = 1
+        context[STATEVAR]['render'] = True
         out = self.nodelist.render(context)
         
         context.pop()
@@ -425,7 +439,7 @@ class FieldNode(template.Node):
         if STATEVAR not in context:
             raise FormTagError("Field tag must be nested in a form tag!")
 
-        if context[STATEVAR] == 0:
+        if not context[STATEVAR]['render']:
             # State 0: Field gathering.
 
             matchers = []
@@ -445,7 +459,7 @@ class FieldNode(template.Node):
                 else:
                     matchers.append(NameMatcher(m))
 
-            context[FTAGSVAR].append(matchers)
+            context[STATEVAR]['tags'].append(matchers)
 
             # If nested fields are present, we must render the content
             # so they can register themselves as well
@@ -456,7 +470,7 @@ class FieldNode(template.Node):
 
         else:
             # State 1: Render assigned fields.
-            fields = context[FIELDSVAR].popleft()
+            fields = context[STATEVAR]['fields'].popleft()
 
             context.push()
             out = []
@@ -470,6 +484,37 @@ class FieldNode(template.Node):
 
     def __repr__(self):
         return '<Field node: {0}>'.format(', '.join(repr(m) for m in self.__matchers))
+
+class IfFieldNode(template.Node):
+    """
+    A conditional field that renders its content only if a field with the
+    given matcher matched one or more field.
+
+    Note. Do not nest Fields in this tag!
+    """
+
+    def __init__(self, nodelists, matchers):
+        self.nodelists = nodelists
+        self.__matchers = matchers
+
+    def render(self, context):
+        if STATEVAR not in context:
+            raise FormTagError("If_field tag must be nested in a form tag!")
+
+        if not context[STATEVAR]['render']:
+            return u''
+
+        if any(m.resolve(context) in context[STATEVAR]['matches'] for m in self.__matchers):
+            return self.nodelists[0].render(context)
+
+        else:
+            if len(self.nodelists) > 1:
+                return self.nodelists[1].render(context)
+
+        return u''
+
+    def __repr__(self):
+        return 'IfFieldNode node: ' + ' '.join(self.__matchers)
 
 class FieldChoicesNode(template.Node):
     """
@@ -496,7 +541,7 @@ class FieldChoicesNode(template.Node):
         self.choice_var = choice_var
         
     def render(self, context):
-        if context[STATEVAR] == 0:
+        if not context[STATEVAR]['render']:
             return u''
 
         field = context[CURFIELDVAR]
@@ -574,7 +619,7 @@ class FieldChoiceGroupsNode(template.Node):
         self.group_var = group_var
 
     def render(self, context):
-        if context[STATEVAR] == 0:
+        if not context[STATEVAR]['render']:
             return u''
 
         field = context[CURFIELDVAR]
@@ -640,7 +685,7 @@ class HiddenFieldsNode(template.Node):
         if FORMVAR not in context:
             raise FormTagError("Hidden field tag must be nested in a form tag!")
 
-        if context[STATEVAR] == 1:
+        if context[STATEVAR]['render']:
             return u'\n'.join([unicode(f) for f in context[FORMVAR].hidden_fields()])
         else:
             return u''
@@ -672,6 +717,18 @@ def field(parser, token):
     parser.delete_first_token()
 
     return FieldNode(nodelist, fieldvar, [parser.compile_filter(t) for t in tokens])
+
+@register.tag
+def if_field(parser, token):
+    tokens = token.split_contents()[1:]
+
+    nodelists = [parser.parse(('endif_field', 'else'))]
+    token = parser.next_token()
+    if token.contents == 'else':
+        nodelists.append(parser.parse(('endif_field',)))
+        parser.next_token()
+
+    return IfFieldNode(nodelists, [parser.compile_filter(t) for t in tokens])
 
 @register.tag
 def field_choices(parser, token):

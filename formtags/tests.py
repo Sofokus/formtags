@@ -226,7 +226,7 @@ class FormtagTests(unittest.TestCase):
             {% field %}{% endfield %}
             {% field "textfield" %}{{ field|widget_name }},{% endfield %}
             {% field "textfield2" %}{{ field|widget_name:"test" }},{% endfield %}
-            {% field "numberfield" %}{{ field|widget_name:"TextInput test" }},{% endfield %}
+            {% field "numberfield" %}{{ field|widget_name:"TextInput NumberInput test" }},{% endfield %}
             """,
             # Expected
             """
@@ -334,6 +334,30 @@ class FormtagTests(unittest.TestCase):
             :textfield:
             A;B;
             choicefield
+            """)
+
+    def test_if_field(self):
+        """
+        Test the if_field tag.
+        """
+        self.__test(
+            SimpleForm(),
+            # Template:
+            """
+            {% if_field "textfield" %}F1{% endif_field %}
+            {% if_field "textfield2" %}F2{% endif_field %}
+            {% if_field "nosuchfield" %}F3{% endif_field %}
+            {% if_field "didnteventry" %}ERR{%else%}OK{% endif_field %}
+            {% field "textfield" %}{% endfield %}
+            {% field "textfield2?" %}{% endfield %}
+            {% field "nosuchfield?" %}{% endfield %}
+            {% field %}{% endfield %}
+            """,
+            # Expected:
+            """
+            F1
+            F2
+            OK
             """)
 
     def __test(self, form, template, expected):
