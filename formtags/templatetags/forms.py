@@ -394,10 +394,14 @@ class FormNode(template.Node):
         self.form = form
 
     def render(self, context):
+        form = context.get(self.form, None)
+        if form is None:
+            return u''
+
         context.push()
 
         # Gather fields
-        context[FORMVAR] = context[self.form]
+        context[FORMVAR] = form
         context[STATEVAR] = {
             'render': False,  # are we in render phase yet?
             'tags': [],       # form field matcher tags
@@ -409,7 +413,7 @@ class FormNode(template.Node):
 
         # Assign fields to tags, taking matcher precedence in account
         # This populates 'fields' and 'matches'.
-        _assign_fields(context[self.form], context[STATEVAR])
+        _assign_fields(form, context[STATEVAR])
 
         # Render
         context[STATEVAR]['render'] = True
